@@ -6,6 +6,7 @@ import java.rmi.server.ServerCloneException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import jakarta.servlet.ServletConfig;
 import jakarta.servlet.ServletContext;
@@ -94,5 +95,16 @@ public class FrontController extends HttpServlet {
             }
         }
         resp.getWriter().println("urlMapping:"+urlMapping);
+        for (Map.Entry<String,Mapping> entry : urlMapping.entrySet()) {
+            String url = entry.getKey();
+            Mapping value = entry.getValue();
+            if(url.equals(req.getRequestURI())){
+                resp.getWriter().println("valeur" + value.getClassName() +"_"+ value.getMethodName());
+            }
+            else{
+                resp.getWriter().println("not found");
+            }
+            
+        }
     }
 }
