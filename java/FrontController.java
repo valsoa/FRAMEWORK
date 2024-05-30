@@ -6,6 +6,7 @@ import java.rmi.server.ServerCloneException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import jakarta.servlet.ServletConfig;
 import jakarta.servlet.ServletContext;
@@ -35,13 +36,24 @@ public class FrontController extends HttpServlet {
             for (Method method : methodes) {
                 if(method.isAnnotationPresent(util.Annotation.Get.class)){
                     result.put(method.getAnnotation(util.Annotation.Get.class).value(),
-                    new Mapping(class1.getSimpleName(),method.getName()));
+                    new Mapping(class1.getName(),method.getName()));
                 }
             }
         }
         return result;
     }
-
+                                                                                                                                                                                                               
+    public Object getValue(String methodName, String className){
+        try{
+            Class<?> clas =Class.forName(className);
+            Method method =clas.getMethod(methodName);
+            Object obj = clas.newInstance();
+            return method.invoke(obj);
+        }
+        catch(Exception e){
+            return null;
+        }
+    }
     public List<Class<?>> allMappingUrls(String packageName, Class<? extends Annotation> annotationClass) {
         listeController = new ArrayList<>();
         ServletContext context = getServletContext();
@@ -80,19 +92,33 @@ public class FrontController extends HttpServlet {
     }
 
     protected void processRequest(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+         boolean test = false;
         resp.setContentType("text/html");
         resp.getWriter().println("<h1> Hello world!!</h1>");
-        resp.getWriter().println("<h1>Lien :" + req.getRequestURI() + "</h1>");
+        resp.getWriter().println("<br><h1>Lien :" + req.getRequestURI() + "</h1>");
 
         for (Class<?> controllerClass : listeController) {
             AnnotationController annotation = controllerClass.getAnnotation(util.Annotation.AnnotationController.class);
             if (annotation != null) {
                 String nameController = controllerClass.getSimpleName();
-                resp.getWriter().println("controller :" + nameController);
+                resp.getWriter().println("<br>controller :" + nameController);
             } else {
-                resp.getWriter().println("Annotation nulle");
+                resp.getWriter().println("<br>Annotation nulle");
             }
         }
-        resp.getWriter().println("urlMapping:"+urlMapping);
+        resp.getWriter().println("<br>urlMapping:"+urlMapping);
+        for (Map.Entry<String,Mapping> entry : urlMapping.entrySet()) {
+            String url = entry.getKey();
+            Mapping value = entry.getValue();
+            if(url.equals(req.getRequestURI())){
+                resp.getWriter().println("<br>valeur:" + value.getClassName() +"_"+ value.getMethodName());
+                resp.getWriter().println("<br>valeur methode:"+(String)getValue(value.getMethodName(),value.getClassName()));
+                test=true;
+                break;
+            }    
+        }
+        if (!test) {
+            resp.getWriter().println("<br>not found");
+        }
     }
 }
