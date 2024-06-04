@@ -2,18 +2,15 @@ package util;
 
 import java.io.IOException;
 import java.lang.reflect.Method;
+import java.net.http.HttpResponse;
 import java.rmi.server.ServerCloneException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import jakarta.servlet.ServletConfig;
-import jakarta.servlet.ServletContext;
-import jakarta.servlet.ServletException;
-import jakarta.servlet.http.HttpServlet;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
+import jakarta.servlet.*;
+import jakarta.servlet.http.*;
 import util.Annotation.*;
 import java.lang.annotation.Annotation;
 
@@ -70,7 +67,14 @@ public class FrontController extends HttpServlet {
             System.out.println("class null");
         }
         return listeController;
-    }     
+    }   
+    public void sendModelView(ModelView model,HttpServletRequest req, HttpServletResponse rep) throws ServletException, IOException{
+        for(Map.Entry<String,Object> entry : model.getData().entrySet()){
+            req.setAttribute(entry.getKey(),entry.getValue());
+        }
+        RequestDispatcher dispatch = req.getRequestDispatcher(model.getUrl());
+        dispatch.forward(req,rep);
+    }  
 
     protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
         processRequest(req, resp);
@@ -99,12 +103,29 @@ public class FrontController extends HttpServlet {
             String url = entry.getKey();
             Mapping value = entry.getValue();
             if(url.equals(req.getRequestURI())){
+<<<<<<< Updated upstream
                 resp.getWriter().println("valeur" + value.getClassName() +"_"+ value.getMethodName());
             }
             else{
                 resp.getWriter().println("not found");
             }
             
+=======
+                Object urlValue=getValue(value.getMethodName(),value.getClassName());
+                resp.getWriter().println("<br>valeur:" + value.getClassName() +"_"+ value.getMethodName());
+                if(urlValue instanceof String s){
+                    resp.getWriter().println("<br>valeur methode:"+s);
+                }
+                else if(urlValue instanceof ModelView m){
+                    sendModelView(m,req,resp);
+                }
+                test=true;
+                break;
+            }    
+        }
+        if (!test) {
+            resp.getWriter().println("<br>not found");
+>>>>>>> Stashed changes
         }
     }
 }
