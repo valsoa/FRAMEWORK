@@ -22,8 +22,8 @@ public class FrontController extends HttpServlet {
     public void init(ServletConfig conf) throws ServletException {
         super.init(conf);
         String packages = this.getInitParameter("package");
-        ServletContext context = getServletContext();
-        listeController = Util.allMappingUrls(packages,util.Annotation.AnnotationController.class,context);
+        ServletContext contexts = getServletContext();
+        listeController = Util.allMappingUrls(packages,util.Annotation.AnnotationController.class,contexts);
         urlMapping =Util.getUrlMapping(listeController);
 
     }                                                                                                                                                                                               
