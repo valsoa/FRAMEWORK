@@ -22,6 +22,7 @@ public class FrontController extends HttpServlet {
     public void init(ServletConfig conf) throws ServletException {
         super.init(conf);
         String packages = this.getInitParameter("package");
+<<<<<<< Updated upstream
         listeController = allMappingUrls(packages,util.Annotation.AnnotationController.class);
         urlMapping = getUrlMapping(listeController);
     }
@@ -53,32 +54,25 @@ public class FrontController extends HttpServlet {
     }
     public List<Class<?>> allMappingUrls(String packageName, Class<? extends Annotation> annotationClass) {
         listeController = new ArrayList<>();
+=======
+>>>>>>> Stashed changes
         ServletContext context = getServletContext();
-        String path = "/WEB-INF/classes/" + packageName.replace('.', '/');
-    
-        Set<String> classNames = context.getResourcePaths(path);
-        if (classNames != null) {
-            for (String className : classNames) {
-                if (className.endsWith(".class")) {
-                    String fullClassName = packageName + "." + className.substring(path.length() + 1, className.length() - 6).replace('/', '.');
-                    
-                    try {
-                        Class<?> clazz = Class.forName(fullClassName);
-                        Annotation annotation = clazz.getAnnotation(annotationClass);
-                        if (annotation instanceof AnnotationController) {
-                            AnnotationController controllerAnnotation = (AnnotationController) annotation;
-                            listeController.add(clazz);
-                        }
-                    } catch (Exception e) {
-                        System.out.println(e);
-                    }
-                }
-            }
-        } else {
-            System.out.println("class null");
+        listeController = Util.allMappingUrls(packages,util.Annotation.AnnotationController.class,context);
+        urlMapping =Util.getUrlMapping(listeController);
+
+    }                                                                                                                                                                                               
+    public Object getValue(String methodName, String className){
+        try{
+            Class<?> clas =Class.forName(className);
+            Method method =clas.getMethod(methodName);
+            Object obj = clas.newInstance();
+            return method.invoke(obj);
         }
-        return listeController;
-    }   
+        catch(Exception e){
+            return null;
+        }
+    }
+   
     public void sendModelView(ModelView model,HttpServletRequest req, HttpServletResponse rep) throws ServletException, IOException{
         for(Map.Entry<String,Object> entry : model.getData().entrySet()){
             req.setAttribute(entry.getKey(),entry.getValue());
@@ -86,7 +80,31 @@ public class FrontController extends HttpServlet {
         RequestDispatcher dispatch = req.getRequestDispatcher(model.getUrl());
         dispatch.forward(req,rep);
     }  
-
+    public void executeUrl(HttpServletRequest req, HttpServletResponse resp,boolean test) throws ServletException, IOException {
+        resp.getWriter().println("<br>urlMapping:"+urlMapping);
+        for (Map.Entry<String,Mapping> entry : urlMapping.entrySet()) {
+            String url = entry.getKey();
+            Mapping value = entry.getValue();
+            if(url.equals(req.getRequestURI())){
+                Object urlValue=getValue(value.getMethodName(),value.getClassName());
+                resp.getWriter().println("<br>valeur:" + value.getClassName() +"_"+ value.getMethodName());
+                if(urlValue instanceof String s){
+                    resp.getWriter().println("<br>valeur methode:"+s);
+                }
+                else if(urlValue instanceof ModelView m){
+                    sendModelView(m,req,resp);
+                }
+                else{
+                    resp.getWriter().println("<br>type de retour non valide");
+                }
+                test=true;
+                break;
+            }    
+        }
+        if (!test) {
+            throw new IllegalArgumentException("url innexistante");
+        }
+    }
     protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
         processRequest(req, resp);
     }
@@ -110,6 +128,7 @@ public class FrontController extends HttpServlet {
                 resp.getWriter().println("<br>Annotation nulle");
             }
         }
+<<<<<<< Updated upstream
         resp.getWriter().println("<br>urlMapping:"+urlMapping);
         for (Map.Entry<String,Mapping> entry : urlMapping.entrySet()) {
             String url = entry.getKey();
@@ -130,5 +149,8 @@ public class FrontController extends HttpServlet {
         if (!test) {
             resp.getWriter().println("<br>not found");
         }
+=======
+       executeUrl(req,resp,test);
+>>>>>>> Stashed changes
     }
 }
