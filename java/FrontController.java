@@ -24,43 +24,6 @@ public class FrontController extends HttpServlet {
     public void init(ServletConfig conf) throws ServletException {
         super.init(conf);
         String packages = this.getInitParameter("package");
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-        listeController = allMappingUrls(packages,util.Annotation.AnnotationController.class);
-        urlMapping = getUrlMapping(listeController);
-    }
-
-    public HashMap<String,Mapping> getUrlMapping(List<Class<?>> listeController){
-        HashMap<String,Mapping> result = new HashMap<>();
-        for (Class<?> class1 : listeController) {
-            Method[] methodes = class1.getDeclaredMethods();
-            for (Method method : methodes) {
-                if(method.isAnnotationPresent(util.Annotation.Get.class)){
-                    result.put(method.getAnnotation(util.Annotation.Get.class).value(),
-                    new Mapping(class1.getName(),method.getName()));
-                }
-            }
-        }
-        return result;
-    }
-                                                                                                                                                                                                               
-    public Object getValue(String methodName, String className){
-        try{
-            Class<?> clas =Class.forName(className);
-            Method method =clas.getMethod(methodName);
-            Object obj = clas.newInstance();
-            return method.invoke(obj);
-        }
-        catch(Exception e){
-            return null;
-        }
-    }
-    public List<Class<?>> allMappingUrls(String packageName, Class<? extends Annotation> annotationClass) {
-        listeController = new ArrayList<>();
-=======
->>>>>>> Stashed changes
-=======
->>>>>>> Stashed changes
         ServletContext context = getServletContext();
         listeController = Util.allMappingUrls(packages,util.Annotation.AnnotationController.class,context);
         urlMapping =Util.getUrlMapping(listeController);
@@ -177,29 +140,6 @@ public class FrontController extends HttpServlet {
                 resp.getWriter().println("<br>Annotation nulle");
             }
         }
-<<<<<<< Updated upstream
-        resp.getWriter().println("<br>urlMapping:"+urlMapping);
-        for (Map.Entry<String,Mapping> entry : urlMapping.entrySet()) {
-            String url = entry.getKey();
-            Mapping value = entry.getValue();
-            if(url.equals(req.getRequestURI())){
-                Object urlValue=getValue(value.getMethodName(),value.getClassName());
-                resp.getWriter().println("<br>valeur:" + value.getClassName() +"_"+ value.getMethodName());
-                if(urlValue instanceof String s){
-                    resp.getWriter().println("<br>valeur methode:"+s);
-                }
-                else if(urlValue instanceof ModelView m){
-                    sendModelView(m,req,resp);
-                }
-                test=true;
-                break;
-            }    
-        }
-        if (!test) {
-            resp.getWriter().println("<br>not found");
-        }
-=======
        executeUrl(req,resp,test);
->>>>>>> Stashed changes
     }
 }
