@@ -2,9 +2,11 @@ package util;
 
 import java.io.IOException;
 import java.lang.reflect.Method;
+import java.lang.reflect.Parameter;
 import java.net.http.HttpResponse;
 import java.rmi.server.ServerCloneException;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -22,6 +24,7 @@ public class FrontController extends HttpServlet {
     public void init(ServletConfig conf) throws ServletException {
         super.init(conf);
         String packages = this.getInitParameter("package");
+<<<<<<< Updated upstream
 <<<<<<< Updated upstream
         listeController = allMappingUrls(packages,util.Annotation.AnnotationController.class);
         urlMapping = getUrlMapping(listeController);
@@ -56,18 +59,63 @@ public class FrontController extends HttpServlet {
         listeController = new ArrayList<>();
 =======
 >>>>>>> Stashed changes
+=======
+>>>>>>> Stashed changes
         ServletContext context = getServletContext();
         listeController = Util.allMappingUrls(packages,util.Annotation.AnnotationController.class,context);
         urlMapping =Util.getUrlMapping(listeController);
 
-    }                                                                                                                                                                                               
-    public Object getValue(String methodName, String className){
+    }     
+
+    public Object[] getAllParams(Method method,HttpServletRequest req)throws IllegalArgumentException{
+        Parameter[] parametres = method.getParameters();
+        Object[] params = new Object[parametres.length];
+
+        for (int i = 0; i < parametres.length; i++) {
+            String nameParam ="";
+            if(parametres[i].isAnnotationPresent(util.Annotation.AnnotationParameter.class)){
+                nameParam=parametres[i].getAnnotation(util.Annotation.AnnotationParameter.class).value();
+            }
+            else{
+                nameParam=parametres[i].getName();
+            }
+           String value = req.getParameter(nameParam) ;
+            Class<?> typeParametre = parametres[i].getType();
+            if (value == null) {
+                throw new IllegalArgumentException("paramatre recquis :"+ nameParam);
+            } 
+            if (typeParametre== int.class) {
+                params[i]= Integer.parseInt(value);
+            }
+            else if (typeParametre== Date.class || typeParametre == java.sql.Date.class) {
+                try{
+                    params[i] =java.sql.Date.valueOf(value);
+                }
+                catch(IllegalArgumentException e){
+                    throw new IllegalArgumentException("le format de la date n'est pas valide:" + nameParam);
+                }
+            }
+            else if(typeParametre == double.class){
+                params[i]= Double.parseDouble(value);
+            }
+            else if (typeParametre == boolean.class) {
+                params[i]= Boolean.parseBoolean(value);
+            }
+            else{
+                params[i]=value;
+            }
+        }
+        return params;
+    }               
+
+    public Object getValue(Mapping mapping, String className,HttpServletRequest req){
         try{
             Class<?> clas =Class.forName(className);
-            Method method =clas.getMethod(methodName);
+            Method method =clas.getMethod(mapping.getMethodName(),mapping.getTypes()); 
             Object obj = clas.newInstance();
-            return method.invoke(obj);
-        }
+            Object[] objectParam=getAllParams(method,req);
+            return method.invoke(obj,objectParam);
+        } 
         catch(Exception e){
             return null;
         }
@@ -86,7 +134,7 @@ public class FrontController extends HttpServlet {
             String url = entry.getKey();
             Mapping value = entry.getValue();
             if(url.equals(req.getRequestURI())){
-                Object urlValue=getValue(value.getMethodName(),value.getClassName());
+                Object urlValue= getValue(value,value.getClassName(),req);
                 resp.getWriter().println("<br>valeur:" + value.getClassName() +"_"+ value.getMethodName());
                 if(urlValue instanceof String s){
                     resp.getWriter().println("<br>valeur methode:"+s);
@@ -95,7 +143,8 @@ public class FrontController extends HttpServlet {
                     sendModelView(m,req,resp);
                 }
                 else{
-                    resp.getWriter().println("<br>type de retour non valide");
+                    // resp.getWriter().println("<br>type de retour non valide"); tsy azo ato zaooo
+                    throw new IllegalArgumentException("type de retour non valide");
                 }
                 test=true;
                 break;

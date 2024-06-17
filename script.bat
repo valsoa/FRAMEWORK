@@ -1,6 +1,6 @@
 set "name=FrontController"
 set "package=util\*"
-javac -d . java/*.java
+javac -parameters -d . java/*.java
 md jar
 jar -cvf jar/%name%.jar  %package%.class
 

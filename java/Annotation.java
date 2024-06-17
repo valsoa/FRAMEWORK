@@ -11,4 +11,9 @@ public interface Annotation {
     public @interface Get{
         String value();
     }
+
+    @Retention(RetentionPolicy.RUNTIME) 
+    public @interface AnnotationParameter{
+        String value();
+    }
 }
