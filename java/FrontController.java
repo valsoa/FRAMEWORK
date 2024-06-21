@@ -1,6 +1,8 @@
 package util;
 
 import java.io.IOException;
+import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
 import java.net.http.HttpResponse;
@@ -66,7 +68,25 @@ public class FrontController extends HttpServlet {
         urlMapping =Util.getUrlMapping(listeController);
 
     }     
-
+    protected Object typage(String paramValue ,String paramName, Class paramType){
+        Object o = null ;
+        if (paramType == Date.class || paramType == java.sql.Date.class) {
+            try {
+                o = java.sql.Date.valueOf(paramValue);
+            } catch (IllegalArgumentException e) {
+                throw new IllegalArgumentException("Invalid date format for parameter: " + paramName);
+            }
+        } else if (paramType == int.class) {
+            o = Integer.parseInt(paramValue);
+        } else if (paramType == double.class) {
+            o = Double.parseDouble(paramValue);
+        } else if (paramType == boolean.class) {
+            o =Boolean.parseBoolean(paramValue);
+        } else {
+            o = paramValue; 
+        }
+        return o;
+    }
     public Object[] getAllParams(Method method,HttpServletRequest req)throws IllegalArgumentException{
         Parameter[] parametres = method.getParameters();
         Object[] params = new Object[parametres.length];
@@ -79,31 +99,33 @@ public class FrontController extends HttpServlet {
             else{
                 nameParam=parametres[i].getName();
             }
-           String value = req.getParameter(nameParam) ;
+
             Class<?> typeParametre = parametres[i].getType();
-            if (value == null) {
-                throw new IllegalArgumentException("paramatre recquis :"+ nameParam);
-            } 
-            if (typeParametre== int.class) {
-                params[i]= Integer.parseInt(value);
-            }
-            else if (typeParametre== Date.class || typeParametre == java.sql.Date.class) {
-                try{
-                    params[i] =java.sql.Date.valueOf(value);
+            if (!typeParametre.isPrimitive() && !typeParametre.equals(String.class)) {
+            try {
+                Object paramObject = typeParametre.getDeclaredConstructor().newInstance();
+                Field[] fields = typeParametre.getDeclaredFields();
+                
+                for (Field field : fields) {
+                    String fieldName = field.getName();
+                    String fieldValue = req.getParameter(nameParam + "." + fieldName);
+                    if (fieldValue != null) {
+                        field.setAccessible(true);
+                        Object typedValue = typage(fieldValue, fieldName, field.getType());
+                        field.set(paramObject, typedValue);
+                    }
                 }
-                catch(IllegalArgumentException e){
-                    throw new IllegalArgumentException("le format de la date n'est pas valide:" + nameParam);
-                }
+                params[i] = paramObject;
+            } catch (InstantiationException | IllegalAccessException | InvocationTargetException | NoSuchMethodException e) {
+                throw new IllegalArgumentException("Error creating parameter object: " + nameParam, e);
             }
-            else if(typeParametre == double.class){
-                params[i]= Double.parseDouble(value);
+        } else {
+            String paramValue = req.getParameter(nameParam);
+            if (paramValue == null) {
+                throw new IllegalArgumentException("Missing parameter: " + nameParam);
             }
-            else if (typeParametre == boolean.class) {
-                params[i]= Boolean.parseBoolean(value);
-            }
-            else{
-                params[i]=value;
-            }
+            params[i] = typage(paramValue, nameParam, typeParametre);
+        }
         }
         return params;
     }               
