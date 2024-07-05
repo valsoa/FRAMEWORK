@@ -23,7 +23,7 @@ public class Util {
                         throw new IllegalArgumentException("L'URL " + method.getAnnotation(util.Annotation.Get.class).value() + " a été dupliquée");
                     }
                     result.put(method.getAnnotation(util.Annotation.Get.class).value(),
-                            new Mapping(class1.getName(), method.getName(),method.getParameterTypes()));
+                    new Mapping(class1.getName(), method.getName(),method.getParameterTypes()));
                 }
             }
         }

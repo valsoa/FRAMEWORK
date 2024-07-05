@@ -22,51 +22,12 @@ import java.lang.annotation.Annotation;
 public class FrontController extends HttpServlet {
     private List<Class<?>> listeController;
     private HashMap<String,Mapping> urlMapping = new HashMap<>();
-
     public void init(ServletConfig conf) throws ServletException {
         super.init(conf);
         String packages = this.getInitParameter("package");
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-        listeController = allMappingUrls(packages,util.Annotation.AnnotationController.class);
-        urlMapping = getUrlMapping(listeController);
-    }
-
-    public HashMap<String,Mapping> getUrlMapping(List<Class<?>> listeController){
-        HashMap<String,Mapping> result = new HashMap<>();
-        for (Class<?> class1 : listeController) {
-            Method[] methodes = class1.getDeclaredMethods();
-            for (Method method : methodes) {
-                if(method.isAnnotationPresent(util.Annotation.Get.class)){
-                    result.put(method.getAnnotation(util.Annotation.Get.class).value(),
-                    new Mapping(class1.getName(),method.getName()));
-                }
-            }
-        }
-        return result;
-    }
-                                                                                                                                                                                                               
-    public Object getValue(String methodName, String className){
-        try{
-            Class<?> clas =Class.forName(className);
-            Method method =clas.getMethod(methodName);
-            Object obj = clas.newInstance();
-            return method.invoke(obj);
-        }
-        catch(Exception e){
-            return null;
-        }
-    }
-    public List<Class<?>> allMappingUrls(String packageName, Class<? extends Annotation> annotationClass) {
-        listeController = new ArrayList<>();
-=======
->>>>>>> Stashed changes
-=======
->>>>>>> Stashed changes
         ServletContext context = getServletContext();
         listeController = Util.allMappingUrls(packages,util.Annotation.AnnotationController.class,context);
         urlMapping =Util.getUrlMapping(listeController);
-
     }     
     protected Object typage(String paramValue ,String paramName, Class paramType){
         Object o = null ;
@@ -93,56 +54,61 @@ public class FrontController extends HttpServlet {
 
         for (int i = 0; i < parametres.length; i++) {
             String nameParam ="";
-            if(parametres[i].isAnnotationPresent(util.Annotation.AnnotationParameter.class)){
-                nameParam=parametres[i].getAnnotation(util.Annotation.AnnotationParameter.class).value();
+                if(parametres[i].isAnnotationPresent(util.Annotation.AnnotationParameter.class)){
+                    nameParam=parametres[i].getAnnotation(util.Annotation.AnnotationParameter.class).value();
+                }  
+                else{
+                    nameParam=parametres[i].getName();
+                    throw new IllegalArgumentException("ETU002420" + nameParam +" sans annotation");
+                }
+                Class<?> typeParametre = parametres[i].getType();
+                if (!typeParametre.isPrimitive() && !typeParametre.equals(String.class)  && !typeParametre.equals(MySession.class) ) {
+                try {
+                    Object paramObject = typeParametre.getDeclaredConstructor().newInstance();
+                    Field[] fields = typeParametre.getDeclaredFields();
+                    
+                    for (Field field : fields) {
+                        String fieldName = field.getName();
+                        String fieldValue = req.getParameter(nameParam + "." + fieldName);
+                        if (fieldValue != null) {
+                            field.setAccessible(true);
+                            Object typedValue = typage(fieldValue, fieldName, field.getType());
+                            field.set(paramObject, typedValue);
+                        }
+                    }
+                    params[i] = paramObject;
+                } catch (InstantiationException | IllegalAccessException | InvocationTargetException | NoSuchMethodException e) {
+                    throw new IllegalArgumentException("Error creating parameter object: " + nameParam, e);
+                }
+            } 
+            else if(typeParametre.equals(MySession.class)){
+                params[i] = new MySession(req.getSession());
             }
-            else{
-                nameParam=parametres[i].getName();
+            else {
+                String paramValue = req.getParameter(nameParam);
+                if (paramValue == null) {
+                    throw new IllegalArgumentException("Missing parameter: " + nameParam);
+                }
+                params[i] = typage(paramValue, nameParam, typeParametre);
             }
 
-            Class<?> typeParametre = parametres[i].getType();
-            if (!typeParametre.isPrimitive() && !typeParametre.equals(String.class)) {
-            try {
-                Object paramObject = typeParametre.getDeclaredConstructor().newInstance();
-                Field[] fields = typeParametre.getDeclaredFields();
-                
-                for (Field field : fields) {
-                    String fieldName = field.getName();
-                    String fieldValue = req.getParameter(nameParam + "." + fieldName);
-                    if (fieldValue != null) {
-                        field.setAccessible(true);
-                        Object typedValue = typage(fieldValue, fieldName, field.getType());
-                        field.set(paramObject, typedValue);
-                    }
-                }
-                params[i] = paramObject;
-            } catch (InstantiationException | IllegalAccessException | InvocationTargetException | NoSuchMethodException e) {
-                throw new IllegalArgumentException("Error creating parameter object: " + nameParam, e);
-            }
-        } else {
-            String paramValue = req.getParameter(nameParam);
-            if (paramValue == null) {
-                throw new IllegalArgumentException("Missing parameter: " + nameParam);
-            }
-            params[i] = typage(paramValue, nameParam, typeParametre);
-        }
         }
         return params;
     }               
-
-    public Object getValue(Mapping mapping, String className,HttpServletRequest req){
-        try{
-            Class<?> clas =Class.forName(className);
-            Method method =clas.getMethod(mapping.getMethodName(),mapping.getTypes()); 
-            Object obj = clas.newInstance();
-            Object[] objectParam=getAllParams(method,req);
-            return method.invoke(obj,objectParam);
-        } 
-        catch(Exception e){
-            return null;
+    public Object getValue(Mapping mapping,String methodeName, String className,HttpServletRequest req)throws Exception{
+        Class<?> clas =Class.forName(className); 
+        Object obj = clas.newInstance();
+        Method [] methods =clas.getMethods();
+        for (Method method2 : methods) {
+            if (method2.getName().equalsIgnoreCase(methodeName)) {
+                method2.setAccessible(true);
+                Object[] objectParam=getAllParams(method2,req);
+                return method2.invoke(obj,objectParam);
+            }
         }
+        return null;
     }
-   
+    
     public void sendModelView(ModelView model,HttpServletRequest req, HttpServletResponse rep) throws ServletException, IOException{
         for(Map.Entry<String,Object> entry : model.getData().entrySet()){
             req.setAttribute(entry.getKey(),entry.getValue());
@@ -150,13 +116,13 @@ public class FrontController extends HttpServlet {
         RequestDispatcher dispatch = req.getRequestDispatcher(model.getUrl());
         dispatch.forward(req,rep);
     }  
-    public void executeUrl(HttpServletRequest req, HttpServletResponse resp,boolean test) throws ServletException, IOException {
+    public void executeUrl(HttpServletRequest req, HttpServletResponse resp,boolean test) throws ServletException, IOException,Exception {
         resp.getWriter().println("<br>urlMapping:"+urlMapping);
         for (Map.Entry<String,Mapping> entry : urlMapping.entrySet()) {
             String url = entry.getKey();
             Mapping value = entry.getValue();
             if(url.equals(req.getRequestURI())){
-                Object urlValue= getValue(value,value.getClassName(),req);
+                Object urlValue= getValue(value,value.getMethodName(),value.getClassName(),req);
                 resp.getWriter().println("<br>valeur:" + value.getClassName() +"_"+ value.getMethodName());
                 if(urlValue instanceof String s){
                     resp.getWriter().println("<br>valeur methode:"+s);
@@ -166,7 +132,7 @@ public class FrontController extends HttpServlet {
                 }
                 else{
                     // resp.getWriter().println("<br>type de retour non valide"); tsy azo ato zaooo
-                    throw new IllegalArgumentException("type de retour non valide");
+                    throw new IllegalArgumentException("type de retour non valide"+urlValue.getClass());
                 }
                 test=true;
                 break;
@@ -185,7 +151,8 @@ public class FrontController extends HttpServlet {
     }
 
     protected void processRequest(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
-         boolean test = false;
+          boolean test = false;
+      try {
         resp.setContentType("text/html");
         resp.getWriter().println("<h1> Hello world!!</h1>");
         resp.getWriter().println("<br><h1>Lien :" + req.getRequestURI() + "</h1>");
@@ -199,29 +166,9 @@ public class FrontController extends HttpServlet {
                 resp.getWriter().println("<br>Annotation nulle");
             }
         }
-<<<<<<< Updated upstream
-        resp.getWriter().println("<br>urlMapping:"+urlMapping);
-        for (Map.Entry<String,Mapping> entry : urlMapping.entrySet()) {
-            String url = entry.getKey();
-            Mapping value = entry.getValue();
-            if(url.equals(req.getRequestURI())){
-                Object urlValue=getValue(value.getMethodName(),value.getClassName());
-                resp.getWriter().println("<br>valeur:" + value.getClassName() +"_"+ value.getMethodName());
-                if(urlValue instanceof String s){
-                    resp.getWriter().println("<br>valeur methode:"+s);
-                }
-                else if(urlValue instanceof ModelView m){
-                    sendModelView(m,req,resp);
-                }
-                test=true;
-                break;
-            }    
-        }
-        if (!test) {
-            resp.getWriter().println("<br>not found");
-        }
-=======
        executeUrl(req,resp,test);
->>>>>>> Stashed changes
+      } catch (Exception e) {
+        e.printStackTrace(resp.getWriter());
+      }
     }
 }
