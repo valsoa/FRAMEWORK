@@ -17,6 +17,7 @@ import jakarta.servlet.*;
 import jakarta.servlet.http.*;
 import util.Annotation.*;
 import java.lang.annotation.Annotation;
+import com.google.gson.Gson;
 
 
 public class FrontController extends HttpServlet {
@@ -48,6 +49,7 @@ public class FrontController extends HttpServlet {
         }
         return o;
     }
+    
     public Object[] getAllParams(Method method,HttpServletRequest req)throws IllegalArgumentException{
         Parameter[] parametres = method.getParameters();
         Object[] params = new Object[parametres.length];
@@ -94,16 +96,34 @@ public class FrontController extends HttpServlet {
 
         }
         return params;
-    }               
-    public Object getValue(Mapping mapping,String methodeName, String className,HttpServletRequest req)throws Exception{
-        Class<?> clas =Class.forName(className); 
+    }    
+    public Object getValue(Mapping mapping, String methodeName, String className, HttpServletRequest req) throws Exception {
+        Class<?> clas = Class.forName(className); 
         Object obj = clas.newInstance();
-        Method [] methods =clas.getMethods();
+        Method[] methods = clas.getMethods();
+        
         for (Method method2 : methods) {
             if (method2.getName().equalsIgnoreCase(methodeName)) {
                 method2.setAccessible(true);
-                Object[] objectParam=getAllParams(method2,req);
-                return method2.invoke(obj,objectParam);
+                Object[] objectParam = getAllParams(method2, req);
+    
+                if (method2.isAnnotationPresent(util.Annotation.RestApi.class)) {
+                    Object result = method2.invoke(obj, objectParam);
+                    Gson gson = new Gson();
+    
+                    if (result instanceof ModelView) {
+                        ModelView modelView = (ModelView) result;
+    
+                        String jsonResponse = gson.toJson(modelView.getData());
+                        req.setAttribute("jsonResponse", jsonResponse); 
+                        return jsonResponse;
+                    } else {
+                        String jsonResponse = gson.toJson(result);
+                        req.setAttribute("jsonResponse", jsonResponse);
+                        return jsonResponse;
+                    }
+                }
+                return method2.invoke(obj, objectParam);
             }
         }
         return null;
@@ -116,30 +136,36 @@ public class FrontController extends HttpServlet {
         RequestDispatcher dispatch = req.getRequestDispatcher(model.getUrl());
         dispatch.forward(req,rep);
     }  
-    public void executeUrl(HttpServletRequest req, HttpServletResponse resp,boolean test) throws ServletException, IOException,Exception {
-        resp.getWriter().println("<br>urlMapping:"+urlMapping);
-        for (Map.Entry<String,Mapping> entry : urlMapping.entrySet()) {
+    public void executeUrl(HttpServletRequest req, HttpServletResponse resp, boolean test) throws ServletException, IOException, Exception {
+        // resp.getWriter().println("<br>urlMapping:" + urlMapping);
+        
+        for (Map.Entry<String, Mapping> entry : urlMapping.entrySet()) {
             String url = entry.getKey();
             Mapping value = entry.getValue();
-            if(url.equals(req.getRequestURI())){
-                Object urlValue= getValue(value,value.getMethodName(),value.getClassName(),req);
-                resp.getWriter().println("<br>valeur:" + value.getClassName() +"_"+ value.getMethodName());
-                if(urlValue instanceof String s){
-                    resp.getWriter().println("<br>valeur methode:"+s);
+            
+            if (url.equals(req.getRequestURI())) {
+                Object urlValue = getValue(value, value.getMethodName(), value.getClassName(), req);
+                // resp.getWriter().println("<br>valeur:" + value.getClassName() + "_" + value.getMethodName());
+
+                if (urlValue instanceof String && req.getAttribute("jsonResponse") != null) {
+                    resp.setContentType("application/json");
+                    resp.getWriter().write((String) urlValue);
+                } 
+                else if (urlValue instanceof String s) {
+                    resp.getWriter().println("<br>valeur methode:" + s);
+                } 
+                else if (urlValue instanceof ModelView m) {
+                    sendModelView(m, req, resp);
+                } 
+                else {
+                    throw new IllegalArgumentException("type de retour non valide: " + urlValue.getClass());
                 }
-                else if(urlValue instanceof ModelView m){
-                    sendModelView(m,req,resp);
-                }
-                else{
-                    // resp.getWriter().println("<br>type de retour non valide"); tsy azo ato zaooo
-                    throw new IllegalArgumentException("type de retour non valide"+urlValue.getClass());
-                }
-                test=true;
+                test = true;
                 break;
-            }    
+            }
         }
         if (!test) {
-            throw new IllegalArgumentException("url innexistante");
+            throw new IllegalArgumentException("url inexistante");
         }
     }
     protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
@@ -154,16 +180,16 @@ public class FrontController extends HttpServlet {
           boolean test = false;
       try {
         resp.setContentType("text/html");
-        resp.getWriter().println("<h1> Hello world!!</h1>");
-        resp.getWriter().println("<br><h1>Lien :" + req.getRequestURI() + "</h1>");
+        // resp.getWriter().println("<h1> Hello world!!</h1>");
+        // resp.getWriter().println("<br><h1>Lien :" + req.getRequestURI() + "</h1>");
 
         for (Class<?> controllerClass : listeController) {
             AnnotationController annotation = controllerClass.getAnnotation(util.Annotation.AnnotationController.class);
             if (annotation != null) {
                 String nameController = controllerClass.getSimpleName();
-                resp.getWriter().println("<br>controller :" + nameController);
+                // resp.getWriter().println("<br>controller :" + nameController);
             } else {
-                resp.getWriter().println("<br>Annotation nulle");
+                // resp.getWriter().println("<br>Annotation nulle");
             }
         }
        executeUrl(req,resp,test);
