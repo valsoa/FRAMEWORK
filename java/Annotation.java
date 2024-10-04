@@ -9,14 +9,23 @@ public interface Annotation {
     @Retention(RetentionPolicy.RUNTIME)
     public @interface AnnotationController{
     }
+
     @Retention(RetentionPolicy.RUNTIME) 
-    public @interface Get{
+    public @interface GET{
+    }
+    @Retention(RetentionPolicy.RUNTIME) 
+    public @interface POST{
+    }
+    @Retention(RetentionPolicy.RUNTIME) 
+    public @interface URL{
         String value();
     }
+
     @Retention(RetentionPolicy.RUNTIME) 
     public @interface AnnotationParameter{
         String value();
     }
+
     @Retention(RetentionPolicy.RUNTIME)
     public @interface RestApi {
         String value() default ""; 
