@@ -13,23 +13,51 @@ import util.Mapping;
 public class Util {
     public static List<Class<?>> listeController;
 
+    // Récupérer le mappage des URL
     public static HashMap<String, Mapping> getUrlMapping(List<Class<?>> listeController) {
         HashMap<String, Mapping> result = new HashMap<>();
         for (Class<?> class1 : listeController) {
             Method[] methodes = class1.getDeclaredMethods();
             for (Method method : methodes) {
-                if (method.isAnnotationPresent(util.Annotation.Get.class)) {
-                    if (result.containsKey(method.getAnnotation(util.Annotation.Get.class).value())) {
-                        throw new IllegalArgumentException("L'URL " + method.getAnnotation(util.Annotation.Get.class).value() + " a été dupliquée");
+                if (method.isAnnotationPresent(util.Annotation.URL.class)) {
+                    boolean hasGet = method.isAnnotationPresent(util.Annotation.GET.class);
+                    boolean hasPost = method.isAnnotationPresent(util.Annotation.POST.class);
+
+                    // Vérifier si les deux annotations sont présentes
+                    if (hasGet && hasPost) {
+                        throw new IllegalArgumentException("La méthode " + method.getName() + " ne peut pas avoir à la fois les annotations @GET et @POST");
                     }
-                    result.put(method.getAnnotation(util.Annotation.Get.class).value(),
-                    new Mapping(class1.getName(), method.getName(),method.getParameterTypes()));
+
+                    // Déterminer la méthode HTTP à utiliser
+                    String httpMethod;
+                    if (hasGet) {
+                        httpMethod = "GET";
+                    } else if (hasPost) {
+                        httpMethod = "POST";
+                    } else {
+                        // Utiliser GET par défaut si aucune annotation n'est présente
+                        httpMethod = "GET";
+                    }
+
+                    // Récupérer l'URL de l'annotation @URL
+                    String url = method.getAnnotation(util.Annotation.URL.class).value();
+
+                    // Vérifier les doublons
+                    String mappingKey = (httpMethod + ":" + url).toLowerCase();
+                    System.out.println("getUrl ="+mappingKey);
+                    if (result.containsKey(mappingKey)) {
+                        throw new IllegalArgumentException("L'URL " + mappingKey + " a été dupliquée");
+                    }
+
+                    // Ajouter le mappage
+                    result.put(mappingKey, new Mapping(class1.getName(), method.getName(), method.getParameterTypes(),httpMethod));
                 }
             }
         }
         return result;
     }
 
+    // Vérifier si le package existe
     public static void checkPackageExists(String packageName, ServletContext context) {
         String packagePath = "/WEB-INF/classes/" + packageName.replace('.', '/');
         Set<String> resourcePaths = context.getResourcePaths(packagePath);
@@ -38,15 +66,15 @@ public class Util {
         }
     }
 
+    // Récupérer toutes les classes avec mappage d'URL
     public static List<Class<?>> allMappingUrls(String packageNames, Class<? extends Annotation> annotationClass, ServletContext context) {
         listeController = new ArrayList<>();
-        
-        // Divisez la chaîne de packages en une liste de packages
+
         String[] packages = packageNames.split(",");
-        
+
         for (String packageName : packages) {
             packageName = packageName.trim();
-            // Vérifiez si le package existe dans le contexte
+
             checkPackageExists(packageName, context);
 
             String path = "/WEB-INF/classes/" + packageName.replace('.', '/');
@@ -60,19 +88,17 @@ public class Util {
                             Class<?> clazz = Class.forName(fullClassName);
                             Annotation annotation = clazz.getAnnotation(annotationClass);
                             if (annotation instanceof AnnotationController) {
-                                AnnotationController controllerAnnotation = (AnnotationController) annotation;
                                 listeController.add(clazz);
                             }
                         } catch (Exception e) {
-                            System.out.println(e);
+                            System.out.println("Erreur lors de la récupération de la classe : " + e);
                         }
                     }
                 }
             } else {
-                System.out.println("class null");
+                System.out.println("Aucune classe trouvée dans le package : " + packageName);
             }
         }
-        
         return listeController;
     }
 }

@@ -5,33 +5,32 @@ import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
-import java.net.http.HttpResponse;
-import java.rmi.server.ServerCloneException;
 import java.util.ArrayList;
-import java.util.Date;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import jakarta.servlet.*;
 import jakarta.servlet.http.*;
+import java.util.List;
+import java.sql.Date;
 import util.Annotation.*;
-import java.lang.annotation.Annotation;
 import com.google.gson.Gson;
-
 
 public class FrontController extends HttpServlet {
     private List<Class<?>> listeController;
-    private HashMap<String,Mapping> urlMapping = new HashMap<>();
+    private HashMap<String, Mapping> urlMapping = new HashMap<>();
+
     public void init(ServletConfig conf) throws ServletException {
         super.init(conf);
         String packages = this.getInitParameter("package");
         ServletContext context = getServletContext();
-        listeController = Util.allMappingUrls(packages,util.Annotation.AnnotationController.class,context);
-        urlMapping =Util.getUrlMapping(listeController);
-    }     
-    protected Object typage(String paramValue ,String paramName, Class paramType){
-        Object o = null ;
+        listeController = Util.allMappingUrls(packages, util.Annotation.AnnotationController.class, context);
+        urlMapping = Util.getUrlMapping(listeController);
+        System.out.println("URL Mappings: " + urlMapping); // Ajoutez un log pour voir les mappings
+    }
+
+    protected Object typage(String paramValue, String paramName, Class<?> paramType) {
+        Object o = null;
         if (paramType == Date.class || paramType == java.sql.Date.class) {
             try {
                 o = java.sql.Date.valueOf(paramValue);
@@ -43,32 +42,31 @@ public class FrontController extends HttpServlet {
         } else if (paramType == double.class) {
             o = Double.parseDouble(paramValue);
         } else if (paramType == boolean.class) {
-            o =Boolean.parseBoolean(paramValue);
+            o = Boolean.parseBoolean(paramValue);
         } else {
-            o = paramValue; 
+            o = paramValue;
         }
         return o;
     }
-    
-    public Object[] getAllParams(Method method,HttpServletRequest req)throws IllegalArgumentException{
+
+    public Object[] getAllParams(Method method, HttpServletRequest req) {
         Parameter[] parametres = method.getParameters();
         Object[] params = new Object[parametres.length];
 
         for (int i = 0; i < parametres.length; i++) {
-            String nameParam ="";
-                if(parametres[i].isAnnotationPresent(util.Annotation.AnnotationParameter.class)){
-                    nameParam=parametres[i].getAnnotation(util.Annotation.AnnotationParameter.class).value();
-                }  
-                else{
-                    nameParam=parametres[i].getName();
-                    throw new IllegalArgumentException("ETU002420" + nameParam +" sans annotation");
-                }
-                Class<?> typeParametre = parametres[i].getType();
-                if (!typeParametre.isPrimitive() && !typeParametre.equals(String.class)  && !typeParametre.equals(MySession.class) ) {
+            String nameParam = "";
+            if (parametres[i].isAnnotationPresent(util.Annotation.AnnotationParameter.class)) {
+                nameParam = parametres[i].getAnnotation(util.Annotation.AnnotationParameter.class).value();
+            } else {
+                nameParam = parametres[i].getName();
+                throw new IllegalArgumentException("ETU002420: Parameter " + nameParam + " is missing an annotation.");
+            }
+            Class<?> typeParametre = parametres[i].getType();
+            if (!typeParametre.isPrimitive() && !typeParametre.equals(String.class) && !typeParametre.equals(MySession.class)) {
                 try {
                     Object paramObject = typeParametre.getDeclaredConstructor().newInstance();
                     Field[] fields = typeParametre.getDeclaredFields();
-                    
+
                     for (Field field : fields) {
                         String fieldName = field.getName();
                         String fieldValue = req.getParameter(nameParam + "." + fieldName);
@@ -82,92 +80,93 @@ public class FrontController extends HttpServlet {
                 } catch (InstantiationException | IllegalAccessException | InvocationTargetException | NoSuchMethodException e) {
                     throw new IllegalArgumentException("Error creating parameter object: " + nameParam, e);
                 }
-            } 
-            else if(typeParametre.equals(MySession.class)){
+            } else if (typeParametre.equals(MySession.class)) {
                 params[i] = new MySession(req.getSession());
-            }
-            else {
+            } else {
                 String paramValue = req.getParameter(nameParam);
                 if (paramValue == null) {
                     throw new IllegalArgumentException("Missing parameter: " + nameParam);
                 }
                 params[i] = typage(paramValue, nameParam, typeParametre);
             }
-
         }
         return params;
-    }    
+    }
+
     public Object getValue(Mapping mapping, String methodeName, String className, HttpServletRequest req) throws Exception {
-        Class<?> clas = Class.forName(className); 
+        Class<?> clas = Class.forName(className);
         Object obj = clas.newInstance();
         Method[] methods = clas.getMethods();
-        
+
         for (Method method2 : methods) {
             if (method2.getName().equalsIgnoreCase(methodeName)) {
                 method2.setAccessible(true);
                 Object[] objectParam = getAllParams(method2, req);
-    
+                
+                // Check for @RestApi and handle JSON response
                 if (method2.isAnnotationPresent(util.Annotation.RestApi.class)) {
                     Object result = method2.invoke(obj, objectParam);
                     Gson gson = new Gson();
-    
-                    if (result instanceof ModelView) {
-                        ModelView modelView = (ModelView) result;
-    
-                        String jsonResponse = gson.toJson(modelView.getData());
-                        req.setAttribute("jsonResponse", jsonResponse); 
-                        return jsonResponse;
-                    } else {
-                        String jsonResponse = gson.toJson(result);
-                        req.setAttribute("jsonResponse", jsonResponse);
-                        return jsonResponse;
-                    }
+                    String jsonResponse = gson.toJson(result);
+                    req.setAttribute("jsonResponse", jsonResponse);
+                    return jsonResponse;
                 }
+                
                 return method2.invoke(obj, objectParam);
             }
         }
         return null;
     }
-    
-    public void sendModelView(ModelView model,HttpServletRequest req, HttpServletResponse rep) throws ServletException, IOException{
-        for(Map.Entry<String,Object> entry : model.getData().entrySet()){
-            req.setAttribute(entry.getKey(),entry.getValue());
+
+    public void sendModelView(ModelView model, HttpServletRequest req, HttpServletResponse rep) throws ServletException, IOException {
+        for (Map.Entry<String, Object> entry : model.getData().entrySet()) {
+            req.setAttribute(entry.getKey(), entry.getValue());
         }
         RequestDispatcher dispatch = req.getRequestDispatcher(model.getUrl());
-        dispatch.forward(req,rep);
-    }  
-    public void executeUrl(HttpServletRequest req, HttpServletResponse resp, boolean test) throws ServletException, IOException, Exception {
-        // resp.getWriter().println("<br>urlMapping:" + urlMapping);
-        
-        for (Map.Entry<String, Mapping> entry : urlMapping.entrySet()) {
-            String url = entry.getKey();
-            Mapping value = entry.getValue();
-            
-            if (url.equals(req.getRequestURI())) {
-                Object urlValue = getValue(value, value.getMethodName(), value.getClassName(), req);
-                // resp.getWriter().println("<br>valeur:" + value.getClassName() + "_" + value.getMethodName());
+        dispatch.forward(req, rep);
+    }
 
-                if (urlValue instanceof String && req.getAttribute("jsonResponse") != null) {
-                    resp.setContentType("application/json");
-                    resp.getWriter().write((String) urlValue);
-                } 
-                else if (urlValue instanceof String s) {
-                    resp.getWriter().println("<br>valeur methode:" + s);
-                } 
-                else if (urlValue instanceof ModelView m) {
-                    sendModelView(m, req, resp);
-                } 
-                else {
-                    throw new IllegalArgumentException("type de retour non valide: " + urlValue.getClass());
-                }
-                test = true;
-                break;
+   public void executeUrl(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException, Exception {
+    String requestURI = req.getRequestURI();
+    String httpMethod = req.getMethod(); // GET ou POST
+    System.out.println(httpMethod + ":" + requestURI);
+    Mapping mapping = urlMapping.get((httpMethod + ":" + requestURI).toLowerCase());
+
+    if (mapping == null) {
+        throw new IllegalArgumentException("URL not found or method mismatch: " + httpMethod + " " + requestURI);
+    }
+
+    Class<?> clas = Class.forName(mapping.getClassName());
+    Method matchingMethod = null;
+
+    // Check for the request method
+    for (Method method : clas.getMethods()) {
+        if (method.getName().equals(mapping.getMethodName())) {
+            if (method.isAnnotationPresent(POST.class) && httpMethod.equalsIgnoreCase("GET") ||
+            !method.isAnnotationPresent(GET.class) && httpMethod.equalsIgnoreCase("POST")) {
+                throw new Exception("HTTP 400 Bad Request");
+            } else{
+                matchingMethod = method;
             }
         }
-        if (!test) {
-            throw new IllegalArgumentException("url inexistante");
-        }
     }
+
+    // If no matching method found
+    if (matchingMethod == null) {
+        throw new IllegalArgumentException("No matching method found for URL and method: " + requestURI + " with HTTP method " + httpMethod);
+    }
+
+    Object urlValue = getValue(mapping, matchingMethod.getName(), mapping.getClassName(), req);
+    if (urlValue instanceof String jsonResponse) {
+        resp.setContentType("application/json");
+        resp.getWriter().write(jsonResponse);
+    } else if (urlValue instanceof ModelView model) {
+        sendModelView(model, req, resp);
+    } else {
+        throw new IllegalArgumentException("Invalid return type: " + urlValue.getClass());
+    }
+}
+
     protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
         processRequest(req, resp);
     }
@@ -177,24 +176,11 @@ public class FrontController extends HttpServlet {
     }
 
     protected void processRequest(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
-          boolean test = false;
-      try {
-        resp.setContentType("text/html");
-        // resp.getWriter().println("<h1> Hello world!!</h1>");
-        // resp.getWriter().println("<br><h1>Lien :" + req.getRequestURI() + "</h1>");
-
-        for (Class<?> controllerClass : listeController) {
-            AnnotationController annotation = controllerClass.getAnnotation(util.Annotation.AnnotationController.class);
-            if (annotation != null) {
-                String nameController = controllerClass.getSimpleName();
-                // resp.getWriter().println("<br>controller :" + nameController);
-            } else {
-                // resp.getWriter().println("<br>Annotation nulle");
-            }
+        try {
+            resp.setContentType("text/html");
+            executeUrl(req, resp);
+        } catch (Exception e) {
+            e.printStackTrace(resp.getWriter());
         }
-       executeUrl(req,resp,test);
-      } catch (Exception e) {
-        e.printStackTrace(resp.getWriter());
-      }
     }
 }
