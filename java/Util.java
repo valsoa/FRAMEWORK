@@ -19,42 +19,26 @@ public class Util {
         for (Class<?> class1 : listeController) {
             Method[] methodes = class1.getDeclaredMethods();
             for (Method method : methodes) {
-                if (method.isAnnotationPresent(util.Annotation.URL.class)) {
-                    boolean hasGet = method.isAnnotationPresent(util.Annotation.GET.class);
-                    boolean hasPost = method.isAnnotationPresent(util.Annotation.POST.class);
+                if (method.isAnnotationPresent(util.Annotation.URL.class)){
+                   String url = method.getAnnotation(util.Annotation.URL.class).value();
+                   VerbAction verbAction= new VerbAction();
+                   verbAction.setMethodName(method.getName());
+                   verbAction.setHttpMethod(method.isAnnotationPresent(util.Verb.POST.class) ? "POST" : "GET");
 
-                    // Vérifier si les deux annotations sont présentes
-                    if (hasGet && hasPost) {
-                        throw new IllegalArgumentException("La méthode " + method.getName() + " ne peut pas avoir à la fois les annotations @GET et @POST");
-                    }
-
-                    // Déterminer la méthode HTTP à utiliser
-                    String httpMethod;
-                    if (hasGet) {
-                        httpMethod = "GET";
-                    } else if (hasPost) {
-                        httpMethod = "POST";
-                    } else {
-                        // Utiliser GET par défaut si aucune annotation n'est présente
-                        httpMethod = "GET";
-                    }
-
-                    // Récupérer l'URL de l'annotation @URL
-                    String url = method.getAnnotation(util.Annotation.URL.class).value();
-
-                    // Vérifier les doublons
-                    String mappingKey = (httpMethod + ":" + url).toLowerCase();
-                    System.out.println("getUrl ="+mappingKey);
-                    if (result.containsKey(mappingKey)) {
-                        throw new IllegalArgumentException("L'URL " + mappingKey + " a été dupliquée");
-                    }
-
-                    // Ajouter le mappage
-                    result.put(mappingKey, new Mapping(class1.getName(), method.getName(), method.getParameterTypes(),httpMethod));
+                   if (!result.containsKey(url)) {
+                        Mapping mapping= new Mapping(class1.getName(),new ArrayList<>());
+                        mapping.getVerbActions().add(verbAction);
+                        result.put(url, mapping); 
+                   }
+                   else{
+                        Mapping exisMapping = result.get(url);
+                        exisMapping.getVerbActions().add(verbAction);
+                   }
                 }
             }
+
         }
-        return result;
+        return result;         
     }
 
     // Vérifier si le package existe

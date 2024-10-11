@@ -11,12 +11,6 @@ public interface Annotation {
     }
 
     @Retention(RetentionPolicy.RUNTIME) 
-    public @interface GET{
-    }
-    @Retention(RetentionPolicy.RUNTIME) 
-    public @interface POST{
-    }
-    @Retention(RetentionPolicy.RUNTIME) 
     public @interface URL{
         String value();
     }
