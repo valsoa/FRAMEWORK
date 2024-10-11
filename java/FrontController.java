@@ -130,33 +130,33 @@ public class FrontController extends HttpServlet {
     String requestURI = req.getRequestURI();
     String httpMethod = req.getMethod(); // GET ou POST
     System.out.println(httpMethod + ":" + requestURI);
-    Mapping mapping = urlMapping.get((httpMethod + ":" + requestURI).toLowerCase());
+    String methodeName="";
+    Mapping mapping = urlMapping.get((requestURI));
 
-    if (mapping == null) {
-        throw new IllegalArgumentException("URL not found or method mismatch: " + httpMethod + " " + requestURI);
-    }
+        if (mapping == null) {
+            throw new IllegalArgumentException("URL not found or method mismatch: " + httpMethod + " " + requestURI);
+        }
 
-    Class<?> clas = Class.forName(mapping.getClassName());
-    Method matchingMethod = null;
+        Class<?> clas = Class.forName(mapping.getClassName());
 
-    // Check for the request method
-    for (Method method : clas.getMethods()) {
-        if (method.getName().equals(mapping.getMethodName())) {
-            if (method.isAnnotationPresent(POST.class) && httpMethod.equalsIgnoreCase("GET") ||
-            !method.isAnnotationPresent(GET.class) && httpMethod.equalsIgnoreCase("POST")) {
-                throw new Exception("HTTP 400 Bad Request");
-            } else{
-                matchingMethod = method;
-            }
+        // Check for the request method
+        boolean verbFound = false;
+
+    // Vérifier si la méthode HTTP est présente dans les verbes d'action
+    for (VerbAction verbAction : mapping.getVerbActions()) {
+        if (verbAction.getHttpMethod().equalsIgnoreCase(req.getMethod())) {
+            verbFound = true;
+            methodeName= verbAction.getMethodName();
+            break;
         }
     }
 
-    // If no matching method found
-    if (matchingMethod == null) {
-        throw new IllegalArgumentException("No matching method found for URL and method: " + requestURI + " with HTTP method " + httpMethod);
+// Si la méthode HTTP n'est pas trouvée, lancer une exception
+    if (!verbFound) {
+        throw new Exception("HTTP 405 Method Not Allowed");
     }
 
-    Object urlValue = getValue(mapping, matchingMethod.getName(), mapping.getClassName(), req);
+    Object urlValue = getValue(mapping, methodeName, mapping.getClassName(), req);
     if (urlValue instanceof String jsonResponse) {
         resp.setContentType("application/json");
         resp.getWriter().write(jsonResponse);
