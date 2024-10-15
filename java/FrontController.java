@@ -26,7 +26,7 @@ public class FrontController extends HttpServlet {
         ServletContext context = getServletContext();
         listeController = Util.allMappingUrls(packages, util.Annotation.AnnotationController.class, context);
         urlMapping = Util.getUrlMapping(listeController);
-        System.out.println("URL Mappings: " + urlMapping); // Ajoutez un log pour voir les mappings
+        System.out.println("URL Mappings: " + urlMapping); 
     }
 
     protected Object typage(String paramValue, String paramName, Class<?> paramType) {
@@ -126,46 +126,44 @@ public class FrontController extends HttpServlet {
         dispatch.forward(req, rep);
     }
 
-   public void executeUrl(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException, Exception {
-    String requestURI = req.getRequestURI();
-    String httpMethod = req.getMethod(); // GET ou POST
-    System.out.println(httpMethod + ":" + requestURI);
-    String methodeName="";
-    Mapping mapping = urlMapping.get((requestURI));
+    public void executeUrl(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException, Exception {
+        String requestURI = req.getRequestURI();
+        String httpMethod = req.getMethod(); // GET ou POST
+        System.out.println(httpMethod + ":" + requestURI);
+        String methodeName = "";
+        Mapping mapping = urlMapping.get(requestURI);
+    
 
         if (mapping == null) {
-            throw new IllegalArgumentException("URL not found or method mismatch: " + httpMethod + " " + requestURI);
+            resp.sendError(HttpServletResponse.SC_NOT_FOUND, "404 Not Found: The requested URL was not found on this server.");
+            return; // On arrête l'exécution
         }
-
+    
         Class<?> clas = Class.forName(mapping.getClassName());
-
-        // Check for the request method
         boolean verbFound = false;
-
-    // Vérifier si la méthode HTTP est présente dans les verbes d'action
-    for (VerbAction verbAction : mapping.getVerbActions()) {
-        if (verbAction.getHttpMethod().equalsIgnoreCase(req.getMethod())) {
-            verbFound = true;
-            methodeName= verbAction.getMethodName();
-            break;
+    
+        for (VerbAction verbAction : mapping.getVerbActions()) {
+            if (verbAction.getHttpMethod().equalsIgnoreCase(req.getMethod())) {
+                verbFound = true;
+                methodeName = verbAction.getMethodName();
+                break;
+            }
+        }
+    
+        if (!verbFound) {
+            throw new Exception("HTTP 405 Method Not Allowed");
+        }
+    
+        Object urlValue = getValue(mapping, methodeName, mapping.getClassName(), req);
+        if (urlValue instanceof String jsonResponse) {
+            resp.setContentType("application/json");
+            resp.getWriter().write(jsonResponse);
+        } else if (urlValue instanceof ModelView model) {
+            sendModelView(model, req, resp);
+        } else {
+            throw new IllegalArgumentException("Invalid return type: " + urlValue.getClass());
         }
     }
-
-// Si la méthode HTTP n'est pas trouvée, lancer une exception
-    if (!verbFound) {
-        throw new Exception("HTTP 405 Method Not Allowed");
-    }
-
-    Object urlValue = getValue(mapping, methodeName, mapping.getClassName(), req);
-    if (urlValue instanceof String jsonResponse) {
-        resp.setContentType("application/json");
-        resp.getWriter().write(jsonResponse);
-    } else if (urlValue instanceof ModelView model) {
-        sendModelView(model, req, resp);
-    } else {
-        throw new IllegalArgumentException("Invalid return type: " + urlValue.getClass());
-    }
-}
 
     protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
         processRequest(req, resp);
