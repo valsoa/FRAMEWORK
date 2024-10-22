@@ -13,7 +13,7 @@ import util.Mapping;
 public class Util {
     public static List<Class<?>> listeController;
 
-    // Récupérer le mappage des URL
+    
     public static HashMap<String, Mapping> getUrlMapping(List<Class<?>> listeController) {
         HashMap<String, Mapping> result = new HashMap<>();
         for (Class<?> class1 : listeController) {
@@ -41,7 +41,6 @@ public class Util {
         return result;         
     }
 
-    // Vérifier si le package existe
     public static void checkPackageExists(String packageName, ServletContext context) {
         String packagePath = "/WEB-INF/classes/" + packageName.replace('.', '/');
         Set<String> resourcePaths = context.getResourcePaths(packagePath);
@@ -50,7 +49,7 @@ public class Util {
         }
     }
 
-    // Récupérer toutes les classes avec mappage d'URL
+
     public static List<Class<?>> allMappingUrls(String packageNames, Class<? extends Annotation> annotationClass, ServletContext context) {
         listeController = new ArrayList<>();
 
