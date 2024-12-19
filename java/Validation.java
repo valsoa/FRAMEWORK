@@ -1,96 +1,113 @@
 package util;
 
-import java.lang.annotation.Retention;
-import java.lang.annotation.RetentionPolicy;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.regex.Pattern;
-import util.Annotation;
 import java.lang.reflect.Field;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.regex.Pattern;
 
 public class Validation {
-    public static List<String> validate(Object object) {
-        List<String> errors = new ArrayList<>();
-    
-        // Récupérer tous les champs de l'objet
-        Field[] fields = object.getClass().getDeclaredFields();
-    
-        for (Field field : fields) {
+
+    public static Map<String, String> validate(Object paramObject) {
+        Map<String, String> errors = new HashMap<>();
+        
+        if (paramObject == null) {
+            errors.put("object", "L'objet ne peut pas être null");
+            return errors;
+        }
+        
+        Class<?> clazz = paramObject.getClass();
+        
+        for (Field field : clazz.getDeclaredFields()) {
             field.setAccessible(true);
-    
+            Object value;
+            
             try {
-                Object value = field.get(object);
-    
-                // Vérification de @Required
-                if (field.isAnnotationPresent(Annotation.Required.class)) {
-                    Annotation.Required required = field.getAnnotation(Annotation.Required.class);
-                    if (value == null || value.toString().trim().isEmpty()) {
-                        String message = required.message().isEmpty() ? 
-                            "Le champ " + field.getName() + " est obligatoire" : required.message();
-                        errors.add(message);
-                    }
-                }
-    
-                if (value == null) continue; // Si la valeur est null, pas besoin de faire les autres vérifications
-    
-                // Vérification de @Number
-                if (field.isAnnotationPresent(Annotation.Number.class)) {
-                    Annotation.Number number = field.getAnnotation(Annotation.Number.class);
-                    try {
-                        Double.parseDouble(value.toString());
-                    } catch (NumberFormatException e) {
-                        String message = number.message().isEmpty() ? 
-                            "Le champ " + field.getName() + " doit être un nombre" : number.message();
-                        errors.add(message);
-                    }
-                }
-    
-                // Vérification de @Email
-                if (field.isAnnotationPresent(Annotation.Email.class)) {
-                    Annotation.Email email = field.getAnnotation(Annotation.Email.class);
-                    String emailRegex = "^[A-Za-z0-9+_.-]+@(.+)$";
-                    Pattern pattern = Pattern.compile(emailRegex);
-                    if (!pattern.matcher(value.toString()).matches()) {
-                        String message = email.message().isEmpty() ? 
-                            "Le champ " + field.getName() + " doit être une adresse email valide" : email.message();
-                        errors.add(message);
-                    }
-                }
-    
-                // Vérification de @Size
-                if (field.isAnnotationPresent(Annotation.Size.class)) {
-                    Annotation.Size size = field.getAnnotation(Annotation.Size.class);
-                    String sizeValue = size.value();
-                    if (!sizeValue.isEmpty()) {
-                        String stringValue = value.toString();
-                        if (sizeValue.contains("-")) {
-                            String[] limits = sizeValue.split("-");
-                            int min = Integer.parseInt(limits[0]);
-                            int max = Integer.parseInt(limits[1]);
-                            if (stringValue.length() < min || stringValue.length() > max) {
-                                String message = size.message().isEmpty() ? 
-                                    "Le champ " + field.getName() + " doit avoir une taille entre " + min + " et " + max : 
-                                    size.message();
-                                errors.add(message);
-                            }
-                        } else {
-                            int exactSize = Integer.parseInt(sizeValue);
-                            if (stringValue.length() != exactSize) {
-                                String message = size.message().isEmpty() ? 
-                                    "Le champ " + field.getName() + " doit avoir une taille de " + exactSize : 
-                                    size.message();
-                                errors.add(message);
-                            }
-                        }
-                    }
-                }
-    
+                value = field.get(paramObject); // Récupération de la valeur
             } catch (IllegalAccessException e) {
-                e.printStackTrace();
+                errors.put(field.getName(), "Impossible d'accéder au champ");
+                continue;
+            }
+            
+            // Ajout des validations
+            if (field.isAnnotationPresent(Annotation.Required.class)) {
+                validateRequired(value, field.getAnnotation(Annotation.Required.class), errors, field.getName());
+            }
+
+            if (field.isAnnotationPresent(Annotation.Number.class)) {
+                validateNumber(value, field.getAnnotation(Annotation.Number.class), errors, field.getName());
+            }
+
+            if (field.isAnnotationPresent(Annotation.Email.class)) {
+                validateEmail(value, field.getAnnotation(Annotation.Email.class), errors, field.getName());
+            }
+
+            if (field.isAnnotationPresent(Annotation.Size.class)) {
+                validateSize(value, field.getAnnotation(Annotation.Size.class), errors, field.getName());
             }
         }
-    
+        
         return errors;
     }
-    
+
+    private static void validateRequired(Object value, Annotation.Required required, Map<String, String> errors, String fieldName) {
+        if (value == null || (value instanceof String && ((String) value).trim().isEmpty())) {
+            String message = required.message().isEmpty() 
+                ? "Le champ " + fieldName + " est obligatoire"
+                : required.message();
+            errors.put(fieldName, message);
+        }
+    }
+
+    private static void validateNumber(Object value, Annotation.Number number, Map<String, String> errors, String fieldName) {
+        if (value == null) return;
+
+        String strValue = value.toString();
+        try {
+            Double.parseDouble(strValue);
+        } catch (NumberFormatException e) {
+            String message = number.message().isEmpty() 
+                ? "Le champ " + fieldName + " doit être un nombre"
+                : number.message();
+            errors.put(fieldName, message);
+        }
+    }
+
+    private static void validateEmail(Object value, Annotation.Email email, Map<String, String> errors, String fieldName) {
+        if (value == null) return;
+
+        String strValue = value.toString();
+        String emailRegex = "^[A-Za-z0-9+_.-]+@(.+)$";
+        if (!Pattern.compile(emailRegex).matcher(strValue).matches()) {
+            String message = email.message().isEmpty() 
+                ? "Le champ " + fieldName + " doit être une adresse email valide"
+                : email.message();
+            errors.put(fieldName, message);
+        }
+    }
+
+    private static void validateSize(Object value, Annotation.Size size, Map<String, String> errors, String fieldName) {
+        if (value == null) return;
+
+        String strValue = value.toString();
+        String sizeValue = size.value();
+        if (sizeValue.contains("-")) {
+            String[] limits = sizeValue.split("-");
+            int min = Integer.parseInt(limits[0]);
+            int max = Integer.parseInt(limits[1]);
+            if (strValue.length() < min || strValue.length() > max) {
+                String message = size.message().isEmpty() 
+                    ? "Le champ " + fieldName + " doit avoir une taille entre " + min + " et " + max
+                    : size.message();
+                errors.put(fieldName, message);
+            }
+        } else {
+            int exactSize = Integer.parseInt(sizeValue);
+            if (strValue.length() != exactSize) {
+                String message = size.message().isEmpty() 
+                    ? "Le champ " + fieldName + " doit avoir une taille de " + exactSize
+                    : size.message();
+                errors.put(fieldName, message);
+            }
+        }
+    }
 }
