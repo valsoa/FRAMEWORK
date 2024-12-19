@@ -1,7 +1,6 @@
 package util;
 
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.PrintWriter;
@@ -37,132 +36,149 @@ public class FrontController extends HttpServlet {
         System.out.println("URL Mappings: " + urlMapping); 
     }
 
-    protected Object typage(String paramValue, String paramName, Class<?> paramType) {
-        Object o = null;
+    protected Object typage(String paramValue, String paramName, Class<?> paramType)throws Exception {
+        if (paramValue == null || paramType == null || paramValue.trim().isEmpty()) {
+            System.out.println("Valeur ou type null pour le champ : " + paramName);
+            return null;
+        }
     
-        // Vérification des types Date
         if (paramType == Date.class || paramType == java.sql.Date.class) {
-            try {
-                o = java.sql.Date.valueOf(paramValue);
-            } catch (IllegalArgumentException e) {
-                throw new IllegalArgumentException("Invalid date format for parameter: " + paramName);
-            }
-        } 
-        // Vérification pour les types numériques
-        else if (paramType == int.class || paramType == Integer.class) {
-            if (paramValue == null || paramValue.trim().isEmpty()) {
-                // Si la valeur est vide ou null, retournez null ou lancez une exception de validation
-                throw new IllegalArgumentException("Le champ " + paramName + " ne peut pas être vide et doit être un nombre.");
-            }
-            try {
-                o = Integer.parseInt(paramValue);
-            } catch (NumberFormatException e) {
-                throw new IllegalArgumentException("Invalid number format for parameter: " + paramName);
-            }
-        } 
-        else if (paramType == double.class || paramType == Double.class) {
-            if (paramValue == null || paramValue.trim().isEmpty()) {
-                // Si la valeur est vide ou null, retournez null ou lancez une exception de validation
-                throw new IllegalArgumentException("Le champ " + paramName + " ne peut pas être vide et doit être un nombre.");
-            }
-            try {
-                o = Double.parseDouble(paramValue);
-            } catch (NumberFormatException e) {
-                throw new IllegalArgumentException("Invalid number format for parameter: " + paramName);
-            }
-        } 
-        // Vérification pour les types booléens
-        else if (paramType == boolean.class || paramType == Boolean.class) {
-            o = Boolean.parseBoolean(paramValue);
+            return java.sql.Date.valueOf(paramValue); 
         }
-        // Autres types (par exemple String)
-        else {
-            o = paramValue;
+
+        if (paramType == int.class || paramType == Integer.class) {
+            return Integer.parseInt(paramValue);
         }
-    
-        return o;
+
+        if (paramType == double.class || paramType == Double.class) {
+            return Double.parseDouble(paramValue);
+        }
+
+        if (paramType == float.class || paramType == Float.class) {
+            return Float.parseFloat(paramValue);
+        }
+
+        if (paramType == long.class || paramType == Long.class) {
+            return Long.parseLong(paramValue);
+        }
+
+        if (paramType == boolean.class || paramType == Boolean.class) {
+            return Boolean.parseBoolean(paramValue); 
+        }
+
+        if (paramType == String.class) {
+            return paramValue;
+        }
+             return null;
     }
     
-    public Object[] getAllParams(Method method, HttpServletRequest req) throws IOException, ServletException, ValidationException {
+    public Object[] getAllParams(Method method, HttpServletRequest req, HttpServletResponse resp) throws Exception {
         Parameter[] parametres = method.getParameters();
         Object[] params = new Object[parametres.length];
     
         for (int i = 0; i < parametres.length; i++) {
-            String nameParam = "";
-            if (parametres[i].isAnnotationPresent(util.Annotation.AnnotationParameter.class)) {
-                nameParam = parametres[i].getAnnotation(util.Annotation.AnnotationParameter.class).value();
-            } else {
-                nameParam = parametres[i].getName();
-                throw new IllegalArgumentException("ETU002420: Parameter " + nameParam + " is missing an annotation.");
-            }
+            String nameParam = parametres[i].isAnnotationPresent(util.Annotation.AnnotationParameter.class) 
+                ? parametres[i].getAnnotation(util.Annotation.AnnotationParameter.class).value()
+                : parametres[i].getName();
     
             Class<?> typeParametre = parametres[i].getType();
-            if (!typeParametre.isPrimitive() && !typeParametre.equals(String.class) && 
-                !typeParametre.equals(MySession.class) && !typeParametre.equals(FileUpload.class)) {
-                try {
-                    Object paramObject = typeParametre.getDeclaredConstructor().newInstance();
-                    Field[] fields = typeParametre.getDeclaredFields();
     
-                    for (Field field : fields) {
-                        String fieldName = field.getName();
-                        String fieldValue = req.getParameter(nameParam + "." + fieldName);
-                        if (fieldValue != null) {
-                            field.setAccessible(true);
-    
-                            // Validation préalable avant de passer à la conversion du type
-                            if (field.getType() == int.class && fieldValue.trim().isEmpty()) {
-                                throw new ValidationException("Le champ " + fieldName + " ne peut pas être vide et doit être un nombre.");
-                            }
-    
-                            Object typedValue = typage(fieldValue, fieldName, field.getType());
-                            field.set(paramObject, typedValue);
-                        }
-                    }
-    
-                    // Validation après avoir rempli l'objet paramObject
-                    List<String> validationErrors = Validation.validate(paramObject);
-                    if (!validationErrors.isEmpty()) {
-                        req.setAttribute("validationErrors", validationErrors);
-                        // Lancer une ValidationException directement si des erreurs de validation sont présentes
-                        throw new ValidationException("Validation failed for parameter: " + nameParam + ". Errors: " + String.join(", ", validationErrors));
-                    }
-    
-                    params[i] = paramObject;
-                } catch (ValidationException e) {
-                    // Gérer l'exception de validation ici, ou la relancer selon le cas
-                    throw e;  // Propager l'exception de validation pour qu'elle soit traitée ailleurs
-                } catch (Exception e) {
-                    // Si d'autres erreurs se produisent (création d'objet, etc.)
-                    throw new IllegalArgumentException("Error creating parameter object: " + nameParam, e);
-                }
-            } else if (typeParametre.equals(MySession.class)) {
+            if (typeParametre.equals(MySession.class)) {
                 params[i] = new MySession(req.getSession());
-            } else if (typeParametre.equals(FileUpload.class)) {
-                params[i] = handleFileUpload(req, nameParam);
-            } else {
-                String paramValue = req.getParameter(nameParam);
-                if (paramValue == null || paramValue.trim().isEmpty()) {
-                    if (typeParametre.isPrimitive()) {
-                        // Valeurs par défaut pour les types primitifs
-                        if (typeParametre == int.class) {
-                            paramValue = "0";
-                        } else if (typeParametre == double.class) {
-                            paramValue = "0.0";
-                        } else if (typeParametre == boolean.class) {
-                            paramValue = "false";
-                        }
-                    } else {
-                        throw new IllegalArgumentException("Missing parameter: " + nameParam);
-                    }
-                }
-                params[i] = typage(paramValue, nameParam, typeParametre);
+                continue;
             }
+    
+            if (typeParametre.equals(FileUpload.class)) {
+                params[i] = handleFileUpload(req, nameParam);
+                continue;
+            }
+    
+            if (isComplexObject(typeParametre)) {
+                Object paramObject = createAndFillComplexObject(typeParametre, nameParam, req);
+                validateObject(paramObject, nameParam, typeParametre, req, resp);
+                params[i] = paramObject;
+                continue;
+            }
+    
+            String paramValue = req.getParameter(nameParam);
+    
+            validateObject(paramValue, nameParam, String.class, req, resp);
+    
+            params[i] = typage(paramValue, nameParam, typeParametre);
         }
     
         return params;
     }
     
-    public Object getValue(Mapping mapping, String methodeName, String className, HttpServletRequest req) throws Exception {
+    private boolean isComplexObject(Class<?> type) {
+        return !type.isPrimitive() && !type.equals(String.class) && 
+               !type.equals(MySession.class) && !type.equals(FileUpload.class);
+    }
+    
+    private Object createAndFillComplexObject(Class<?> type, String nameParam, HttpServletRequest req) throws Exception {
+        Object paramObject = type.getDeclaredConstructor().newInstance();
+        Field[] fields = type.getDeclaredFields();
+
+        for (Field field : fields) {
+            String fieldName = field.getName();
+            String fieldValue = req.getParameter(nameParam + "." + fieldName);
+            System.out.println("Parametre reçu pour " + fieldName + ": " + fieldValue);
+
+            if (fieldValue != null && !fieldValue.trim().isEmpty()) {
+                field.setAccessible(true);
+                Object typedValue = typage(fieldValue, fieldName, field.getType());
+                System.out.println("Valeur typee pour " + fieldName + ": " + typedValue);
+                field.set(paramObject, typedValue);
+            } else {
+                System.out.println("Parametre manquant ou vide pour " + fieldName);
+            }
+        }
+
+        return paramObject;
+    }
+    
+    private void validateObject(Object paramValue, String nameParam, Class<?> typeParametre, HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+        // Map des erreurs de validation
+        Map<String, String> errorMap = new HashMap<>();
+        // Map des valeurs du formulaire
+        Map<String, String> formData = new HashMap<>();
+        
+        // Vérification de la nullité de l'objet
+        if (paramValue == null) {
+            errorMap.put(nameParam, "Le paramètre " + nameParam + " ne peut pas être null");
+        } else {
+            // Appel de la méthode de validation
+            Map<String, String> validationErrors = Validation.validate(paramValue);
+            
+            // Ajouter les erreurs de validation à errorMap
+            if (!validationErrors.isEmpty()) {
+                errorMap.putAll(validationErrors);
+            }
+        }
+    
+        // Ajouter les données saisies au formulaire
+        req.getParameterMap().forEach((key, values) -> {
+            if (values.length > 0) {
+                formData.put(key, values[0]);
+            }
+        });
+    
+        if (!errorMap.isEmpty()) {
+           // Sinon, stocker les erreurs et les données dans la session et rediriger vers la page précédente
+           req.getSession().setAttribute("validationErrors", errorMap);
+           req.getSession().setAttribute("formData", formData);
+   
+           // Redirection vers la page précédente
+           String referer = req.getHeader("Referer");
+           if (referer != null && !referer.isEmpty()) {
+               resp.sendRedirect(referer);
+           } 
+        }
+    }
+    
+    
+
+    public Object getValue(Mapping mapping, String methodeName, String className, HttpServletRequest req, HttpServletResponse resp) throws Exception {
         Class<?> clas = Class.forName(className);
         Object obj = clas.newInstance();
         Method[] methods = clas.getMethods();
@@ -170,9 +186,10 @@ public class FrontController extends HttpServlet {
         for (Method method2 : methods) {
             if (method2.getName().equalsIgnoreCase(methodeName)) {
                 method2.setAccessible(true);
-                Object[] objectParam = getAllParams(method2, req);
-                
-                // verifie  for @RestApi et  handle JSON response
+                // Passer 'resp' correctement à getAllParams
+                Object[] objectParam = getAllParams(method2, req, resp); // Passer 'resp'
+
+                // Vérification pour @RestApi et gestion de la réponse JSON
                 if (method2.isAnnotationPresent(util.Annotation.RestApi.class)) {
                     Object result = method2.invoke(obj, objectParam);
                     Gson gson = new Gson();
@@ -180,7 +197,6 @@ public class FrontController extends HttpServlet {
                     req.setAttribute("jsonResponse", jsonResponse);
                     return jsonResponse;
                 }
-                
                 return method2.invoke(obj, objectParam);
             }
         }
@@ -194,7 +210,6 @@ public class FrontController extends HttpServlet {
         RequestDispatcher dispatch = req.getRequestDispatcher(model.getUrl());
         dispatch.forward(req, rep);
     }
-
 
     public static FileUpload handleFileUpload(HttpServletRequest request, String inputFileParam) throws IOException, ServletException {
         Part filePart = request.getPart(inputFileParam); 
@@ -227,47 +242,45 @@ public class FrontController extends HttpServlet {
         return "";
     }
 
-
     public void executeUrl(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException, Exception {
-    PrintWriter out = resp.getWriter();
-    String requestURI = req.getRequestURI();
-    String httpMethod = req.getMethod();
-    String methodeName = "";
-    Mapping mapping = urlMapping.get(requestURI);
+        PrintWriter out = resp.getWriter();
+        String requestURI = req.getRequestURI();
+        String httpMethod = req.getMethod();
+        String methodeName = "";
+        Mapping mapping = urlMapping.get(requestURI);
 
-    if (mapping == null) {
-        out.println("404 Not Found: The requested URL was not found on this server.");
-        return;
-    }
+        if (mapping == null) {
+            out.println("404 Not Found: The requested URL was not found on this server.");
+            return;
+        }
 
-    Class<?> clas = Class.forName(mapping.getClassName());
-    boolean verbFound = false;
+        Class<?> clas = Class.forName(mapping.getClassName());
+        boolean verbFound = false;
 
-    for (VerbAction verbAction : mapping.getVerbActions()) {
-        if (verbAction.getHttpMethod().equalsIgnoreCase(req.getMethod())) {
-            verbFound = true;
-            methodeName = verbAction.getMethodName();
-            break;
+        for (VerbAction verbAction : mapping.getVerbActions()) {
+            if (verbAction.getHttpMethod().equalsIgnoreCase(req.getMethod())) {
+                verbFound = true;
+                methodeName = verbAction.getMethodName();
+                break;
+            }
+        }
+
+        if (!verbFound) {
+            throw new Exception("HTTP 405 Method Not Allowed");
+        }
+
+        // Assurez-vous que resp est passé ici dans l'appel de getAllParams
+        Object urlValue = getValue(mapping, methodeName, mapping.getClassName(), req, resp);
+
+        if (urlValue instanceof String jsonResponse) {
+            resp.setContentType("application/json");
+            resp.getWriter().write(jsonResponse);
+        } else if (urlValue instanceof ModelView model) {
+            sendModelView(model, req, resp);
+        } else {
+            throw new IllegalArgumentException("Invalid return type: " + urlValue.getClass());
         }
     }
-
-    if (!verbFound) {
-        throw new Exception("HTTP 405 Method Not Allowed");
-    }
-
-    Object urlValue = getValue(mapping, methodeName, mapping.getClassName(), req);
-
-    if (urlValue instanceof String jsonResponse) {
-        resp.setContentType("application/json");
-        resp.getWriter().write(jsonResponse);
-    } else if (urlValue instanceof ModelView model) {
-        sendModelView(model, req, resp);
-    } 
-    else {
-        throw new IllegalArgumentException("Invalid return type: " + urlValue.getClass());
-    }
-}
-
 
     protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
         processRequest(req, resp);
